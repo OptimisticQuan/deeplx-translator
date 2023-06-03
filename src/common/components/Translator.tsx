@@ -1065,8 +1065,9 @@ function InnerTranslator(props: IInnerTranslatorProps) {
         }
         if (
             settings &&
-            ((settings.provider === 'ChatGPT' && !settings.apiModel) ||
-                (settings.provider !== 'ChatGPT' && !settings.apiKeys))
+            ((["ChatGPT", "ChatGPT-AccessToken"].includes(settings.provider) && !settings.apiModel) ||
+                (["OpenAI", "Azure"].includes(settings.provider) && !settings.apiKeys ) ||
+                (["DeepLX"].includes(settings.provider) && !settings.deepLXURL))
         ) {
             setShowSettings(true)
         }

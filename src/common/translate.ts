@@ -702,7 +702,7 @@ async function translateByDeepLX(query: TranslateQuery, settings: ISettings) {
             ret += "\n\n其他可能的翻译：\n";
             ret += ret.alternatives.join("\n");
         }
-        query.onMessage({ content: ret, role: '', isWordMode: false })
+        query.onMessage({ content: ret, role: '', isWordMode: false, isFullText: true })
+        query.onFinish('stop')
     }
-    query.onFinish('stop')
 }
