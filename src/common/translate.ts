@@ -8,9 +8,10 @@ import { getLangConfig, LangCode } from './components/lang/lang'
 import { getUniversalFetch } from './universal-fetch'
 import { Action } from './internal-services/db'
 import { codeBlock, oneLine, oneLineTrim } from 'common-tags'
+import { ISettings } from './types'
 
 export type TranslateMode = 'translate' | 'polishing' | 'summarize' | 'analyze' | 'explain-code' | 'big-bang'
-export type Provider = 'OpenAI' | 'ChatGPT' | 'Azure'
+export type Provider = 'OpenAI' | 'ChatGPT' | 'Azure' | 'ChatGPT-AccessToken' | 'DeepLX'
 export type APIModel =
     | 'gpt-3.5-turbo'
     | 'gpt-3.5-turbo-0301'
@@ -191,13 +192,20 @@ export class QuoteProcessor {
 const chineseLangCodes = ['zh-Hans', 'zh-Hant', 'lzh', 'yue', 'jdbhw', 'xdbhw']
 
 export async function translate(query: TranslateQuery) {
+    const settings = await utils.getSettings()
+    if (settings.provider === "DeepLX") {
+        return translateByDeepLX(query, settings)
+    }
+    return translateByOpenAI(query, settings)
+}
+
+async function translateByOpenAI(query: TranslateQuery, settings: ISettings) {
     const fetcher = getUniversalFetch()
     let rolePrompt = ''
     let commandPrompt = ''
     let contentPrompt = query.text
     const assistantPrompts: string[] = []
     let quoteProcessor: QuoteProcessor | undefined
-    const settings = await utils.getSettings()
     let isWordMode = false
 
     if (query.mode === 'big-bang') {
@@ -408,8 +416,13 @@ export async function translate(query: TranslateQuery) {
     }
 
     let apiKey = ''
-    if (settings.provider !== 'ChatGPT') {
+    let chatGPTWebAPI = utils.defaultChatGPTWebAPI
+    if (["Azure", "OpenAI"].includes(settings.provider)) {
         apiKey = await utils.getApiKey()
+    }
+    if (settings.provider === 'ChatGPT-AccessToken') {
+        apiKey = settings.chatGPTAccessToken
+        chatGPTWebAPI = settings.chatGPTWebAPI
     }
     const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -425,16 +438,18 @@ export async function translate(query: TranslateQuery) {
             'prompt'
         ] = `<|im_start|>system\n${rolePrompt}\n<|im_end|>\n<|im_start|>user\n${commandPrompt}\n${contentPrompt}\n<|im_end|>\n<|im_start|>assistant\n`
         body['stop'] = ['<|im_end|>']
-    } else if (settings.provider === 'ChatGPT') {
-        let resp: Response | null = null
-        resp = await fetcher(utils.defaultChatGPTAPIAuthSession, { signal: query.signal })
-        if (resp.status !== 200) {
-            query.onError?.('Failed to fetch ChatGPT Web accessToken.')
-            query.onStatusCode?.(resp.status)
-            return
+    } else if (["ChatGPT", "ChatGPT-AccessToken"]) {
+        if (settings.provider === 'ChatGPT') {
+            let resp: Response | null = null
+            resp = await fetcher(utils.defaultChatGPTAPIAuthSession, { signal: query.signal })
+            if (resp.status !== 200) {
+                query.onError?.('Failed to fetch ChatGPT Web accessToken.')
+                query.onStatusCode?.(resp.status)
+                return
+            }
+            const respJson = await resp?.json()
+            apiKey = respJson.accessToken
         }
-        const respJson = await resp?.json()
-        apiKey = respJson.accessToken
         body = {
             action: 'next',
             messages: [
@@ -486,6 +501,7 @@ export async function translate(query: TranslateQuery) {
     switch (settings.provider) {
         case 'OpenAI':
         case 'ChatGPT':
+        case 'ChatGPT-AccessToken':
             headers['Authorization'] = `Bearer ${apiKey}`
             break
 
@@ -494,10 +510,10 @@ export async function translate(query: TranslateQuery) {
             break
     }
 
-    if (settings.provider === 'ChatGPT') {
+    if (["ChatGPT", "ChatGPT-AccessToken"].includes(settings.provider)) {
         let conversationId = ''
         let length = 0
-        await fetchSSE(`${utils.defaultChatGPTWebAPI}/conversation`, {
+        await fetchSSE(`${chatGPTWebAPI}/conversation`, {
             method: 'POST',
             headers,
             body: JSON.stringify(body),
@@ -572,7 +588,7 @@ export async function translate(query: TranslateQuery) {
         })
 
         if (conversationId) {
-            await fetcher(`${utils.defaultChatGPTWebAPI}/conversation/${conversationId}`, {
+            await fetcher(`${chatGPTWebAPI}/conversation/${conversationId}`, {
                 method: 'PATCH',
                 headers,
                 body: JSON.stringify({ is_visible: false }),
@@ -659,4 +675,34 @@ export async function translate(query: TranslateQuery) {
             },
         })
     }
+}
+
+async function translateByDeepLX(query: TranslateQuery, settings: ISettings) {
+    if (query.mode === 'big-bang') {
+        query.onError('DeepLX does not support big bang mode')
+        return;
+    }
+    const sourceLang = query.detectFrom.split('-')[0].toUpperCase()
+    const targetLang = query.detectTo.split('-')[0].toUpperCase()
+    const fetcher = getUniversalFetch()
+    const resp = await fetcher(settings.deepLXURL, {
+        method: 'POST',
+        body: JSON.stringify({
+            text: query.text,
+            source_lang: sourceLang,
+            target_lang: targetLang,
+        })
+    })
+    const json = await resp.json()
+    if (json.code !== 200) {
+        query.onError(json.message)
+    } else {
+        var ret = json.data;
+        if (ret.alternatives) {
+            ret += "\n\n其他可能的翻译：\n";
+            ret += ret.alternatives.join("\n");
+        }
+        query.onMessage({ content: ret, role: '', isWordMode: false })
+    }
+    query.onFinish('stop')
 }

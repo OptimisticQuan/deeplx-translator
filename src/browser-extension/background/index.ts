@@ -7,9 +7,9 @@ import { actionInternalService } from '../../common/internal-services/action'
 
 browser.contextMenus.create(
     {
-        id: 'open-translator',
+        id: 'deeplx-translator',
         type: 'normal',
-        title: 'OpenAI Translator',
+        title: 'DeepLX Translator',
         contexts: ['page', 'selection'],
     },
     () => {
@@ -21,7 +21,7 @@ browser.contextMenus.onClicked.addListener(async function (info) {
     const [tab] = await chrome.tabs.query({ active: true })
     tab.id &&
         browser.tabs.sendMessage(tab.id, {
-            type: 'open-translator',
+            type: 'deeplx-translator',
             info,
         })
 })

@@ -25,6 +25,9 @@ export async function getApiKey(): Promise<string> {
 // In order to let the type system remind you that all keys have been passed to browser.storage.sync.get(keys)
 const settingKeys: Record<keyof ISettings, number> = {
     apiKeys: 1,
+    chatGPTAccessToken: 1,
+    chatGPTWebAPI: 1,
+    deepLXURL: 1,
     apiURL: 1,
     apiURLPath: 1,
     apiModel: 1,
@@ -52,6 +55,15 @@ export async function getSettings(): Promise<ISettings> {
     const settings = items as ISettings
     if (!settings.apiKeys) {
         settings.apiKeys = ''
+    }
+    if (!settings.chatGPTAccessToken) {
+        settings.chatGPTAccessToken = ''
+    }
+    if (!settings.chatGPTWebAPI) {
+        settings.chatGPTWebAPI = defaultChatGPTWebAPI
+    }
+    if (!settings.deepLXURL) {
+        settings.deepLXURL = ''
     }
     if (!settings.apiURL) {
         settings.apiURL = defaultAPIURL

@@ -44,6 +44,9 @@ export interface IThemedStyleProps {
 
 export interface ISettings {
     apiKeys: string
+    chatGPTAccessToken: string
+    chatGPTWebAPI: string
+    deepLXURL: string
     apiURL: string
     apiURLPath: string
     apiModel: string

@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
 
-    "name": "OpenAI Translator",
-    "description": "OpenAI-Translator is a Chrome extension that uses the ChatGPT API for translation.",
+    "name": "DeepLX Translator",
+    "description": "DeepLX-Translator",
     "version": "0.1.0",
 
     "icons": {

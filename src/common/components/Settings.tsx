@@ -553,21 +553,28 @@ function APIModelSelector({ provider, value, onChange, onBlur }: APIModelSelecto
                 { label: 'gpt-4-32k', id: 'gpt-4-32k' },
                 { label: 'gpt-4-32k-0314', id: 'gpt-4-32k-0314' },
             ])
-        } else if (provider === 'ChatGPT') {
+        } else if (provider === 'ChatGPT' || provider === 'ChatGPT-AccessToken') {
             setIsLoading(true)
             try {
                 ;(async () => {
-                    const sessionResp = await fetcher(utils.defaultChatGPTAPIAuthSession, { cache: 'no-cache' })
-                    if (sessionResp.status !== 200) {
-                        setIsChatGPTNotLogin(true)
-                        setErrMsg('Failed to fetch ChatGPT Web accessToken')
-                        return
+                    let accessToken = ''
+                    const settings = await utils.getSettings()
+                    if (provider === 'ChatGPT-AccessToken') {
+                        accessToken = settings.chatGPTAccessToken
+                    } else {
+                        const sessionResp = await fetcher(utils.defaultChatGPTAPIAuthSession, { cache: 'no-cache' })
+                        if (sessionResp.status !== 200) {
+                            setIsChatGPTNotLogin(true)
+                            setErrMsg('Failed to fetch ChatGPT Web accessToken')
+                            return
+                        }
+                        const sessionRespJsn = await sessionResp.json()
+                        accessToken = sessionRespJsn.accessToken
                     }
-                    const sessionRespJsn = await sessionResp.json()
                     const headers: Record<string, string> = {
-                        Authorization: `Bearer ${sessionRespJsn.accessToken}`,
+                        Authorization: `Bearer ${accessToken}`,
                     }
-                    const modelsResp = await fetcher(`${utils.defaultChatGPTWebAPI}/models`, {
+                    const modelsResp = await fetcher(`${settings.chatGPTWebAPI}/models`, {
                         cache: 'no-cache',
                         headers,
                     })
@@ -883,6 +890,8 @@ function ProviderSelector({ value, onChange }: IProviderSelectorProps) {
         ? ([
               { label: 'OpenAI', id: 'OpenAI' },
               { label: 'Azure', id: 'Azure' },
+              { label: 'ChatGPT-AccessToken', id: 'ChatGPT-AccessToken' },
+              { label: 'DeepLX', id: 'DeepLX' },
           ] as {
               label: string
               id: Provider
@@ -891,6 +900,8 @@ function ProviderSelector({ value, onChange }: IProviderSelectorProps) {
               { label: 'OpenAI', id: 'OpenAI' },
               { label: 'ChatGPT (Web)', id: 'ChatGPT' },
               { label: 'Azure', id: 'Azure' },
+              { label: 'ChatGPT-AccessToken', id: 'ChatGPT-AccessToken' },
+              { label: 'DeepLX', id: 'DeepLX' },
           ] as {
               label: string
               id: Provider
@@ -951,6 +962,9 @@ export function InnerSettings({ onSave }: IInnerSettingsProps) {
     const [loading, setLoading] = useState(false)
     const [values, setValues] = useState<ISettings>({
         apiKeys: '',
+        chatGPTAccessToken: '',
+        chatGPTWebAPI: utils.defaultChatGPTWebAPI,
+        deepLXURL: '',
         apiURL: utils.defaultAPIURL,
         apiURLPath: utils.defaultAPIURLPath,
         apiModel: utils.defaultAPIModel,
@@ -1098,7 +1112,7 @@ export function InnerSettings({ onSave }: IInnerSettingsProps) {
                 <FormItem name='provider' label={t('Default Service Provider')} required>
                     <ProviderSelector />
                 </FormItem>
-                {values.provider !== 'ChatGPT' && (
+                {["Azure", "OpenAI"].includes(values.provider) && (
                     <FormItem
                         required
                         name='apiKeys'
@@ -1132,12 +1146,29 @@ export function InnerSettings({ onSave }: IInnerSettingsProps) {
                         <Input autoFocus type='password' size='compact' onBlur={onBlur} />
                     </FormItem>
                 )}
-                {values.provider !== 'Azure' && (
+                {["ChatGPT-AccessToken"].includes(values.provider) && (
+                    <>
+                        <FormItem required name='chatGPTAccessToken' label={t('ChatGPT Access Token')}>
+                            <Input size='compact' onBlur={onBlur} />
+                        </FormItem>
+                        <FormItem required name='chatGPTWebAPI' label={t('ChatGPT Web API')}>
+                            <Input size='compact' onBlur={onBlur} />
+                        </FormItem>
+                    </>
+                )}
+                {["DeepLX"].includes(values.provider) && (
+                    <>
+                        <FormItem required name='deepLXURL' label={t('DeepLX URL')}>
+                            <Input size='compact' onBlur={onBlur} />
+                        </FormItem>
+                    </>
+                )}
+                {["ChatGPT", "OpenAI", "ChatGPT-AccessToken"].includes(values.provider) && (
                     <FormItem name='apiModel' label={t('API Model')} required>
                         <APIModelSelector provider={values.provider} onBlur={onBlur} />
                     </FormItem>
                 )}
-                {values.provider !== 'ChatGPT' && (
+                {["Azure", "OpenAI"].includes(values.provider) && (
                     <>
                         <FormItem required name='apiURL' label={t('API URL')}>
                             <Input size='compact' onBlur={onBlur} />
